@@ -66,28 +66,27 @@ public static class FileSave
         foreach (var value in values.ToArray()) {
             foreach (var property_info in properties) {
                 if (property_info.GetCustomAttribute<SerialFieldAttribute>() is { } serial) {
-                    WritePropertyValue(property_info, file, value);
+                    WriteObject(property_info.GetValue(value), file);
                 }
                 else if (property_info.GetCustomAttribute<RangeFieldAttribute>() is { } index) {
                     using var index_file = File.Open(Path.Combine(directory, index.IndexFile), FileMode.Append);
-                    WriteIndexed(property_info, file, index_file, value);
+                    WriteIndexedObject(property_info.GetValue(value), file, index_file);
                 }
             }
         }
     }
 
-    public static int WritePropertyValue(PropertyInfo propertyInfo, Stream fileStream, object? value)
+    public static int WriteObject(object? value, Stream fileStream)
     {
-        object? property_value = propertyInfo.GetValue(value);
-        byte[]  bytes          = BinarySerializer.Serialize(property_value);
+        byte[] bytes = BinarySerializer.Serialize(value);
         fileStream.Write(bytes);
         return bytes.Length;
     }
 
-    public static void WriteIndexed(PropertyInfo propertyInfo, Stream stream, Stream indexFile, object? value)
+    public static void WriteIndexedObject(object? value, Stream stream, Stream indexFile)
     {
         int    offset      = (int)indexFile.Position;
-        int    written     = WritePropertyValue(propertyInfo, indexFile, value);
+        int    written     = WriteObject(value, indexFile);
         byte[] range_bytes = BinarySerializer.Serialize(offset..written);
         stream.Write(range_bytes);
     }
