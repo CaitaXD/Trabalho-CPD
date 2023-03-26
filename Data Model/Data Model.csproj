@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0</TargetFramework>
+        <RootNamespace>Data_Model</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Reference Include="CsvHelper">
+        <HintPath>..\..\..\.nuget\packages\csvhelper\30.0.1\lib\net6.0\CsvHelper.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="JetBrains.Annotations" Version="2023.2.0-eap1" />
+    </ItemGroup>
+
+</Project>
