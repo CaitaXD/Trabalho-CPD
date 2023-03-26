@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Data_Model;
@@ -65,12 +66,19 @@ public static class FileSave
 
         foreach (var value in values.ToArray()) {
             foreach (var property_info in properties) {
+                object? property_value = property_info.GetValue(value);
+
                 if (property_info.GetCustomAttribute<SerialFieldAttribute>() is { } serial) {
-                    WriteObject(property_info.GetValue(value), file);
+                    if (property_value is string str && str.Length < serial.Count) {
+                        WriteObject(str.PadRight(serial.Count, (char)0), file);
+                    }
+                    else {
+                        WriteObject(property_value, file);
+                    }
                 }
                 else if (property_info.GetCustomAttribute<RangeFieldAttribute>() is { } index) {
                     using var index_file = File.Open(Path.Combine(directory, index.IndexFile), FileMode.Append);
-                    WriteIndexedObject(property_info.GetValue(value), file, index_file);
+                    WriteIndexedObject<Range>(property_value, file, index_file);
                 }
             }
         }
@@ -78,16 +86,27 @@ public static class FileSave
 
     public static int WriteObject(object? value, Stream fileStream)
     {
-        byte[] bytes = BinarySerializer.Serialize(value);
+        var bytes = BinarySerializer.Serialize(value);
         fileStream.Write(bytes);
         return bytes.Length;
     }
 
-    public static void WriteIndexedObject(object? value, Stream stream, Stream indexFile)
+    public static void WriteIndexedObject<TIndex>(object? value, Stream stream, Stream indexStream)
+        where TIndex : unmanaged
     {
-        int    offset      = (int)indexFile.Position;
-        int    written     = WriteObject(value, indexFile);
-        byte[] range_bytes = BinarySerializer.Serialize(offset..written);
-        stream.Write(range_bytes);
+        var index_type = typeof(TIndex);
+
+        if (index_type == typeof(Range)) {
+            int offset      = (int)indexStream.Position;
+            int written     = WriteObject(value, indexStream);
+            var index_bytes = BinarySerializer.Serialize(offset..written);
+            stream.Write(index_bytes);
+        }
+        else {
+            long position    = indexStream.Position;
+            var  offset      = Unsafe.As<long, TIndex>(ref position);
+            var  index_bytes = BinarySerializer.Serialize(offset);
+            stream.Write(index_bytes);
+        }
     }
 }

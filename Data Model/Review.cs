@@ -4,12 +4,13 @@ using System.Runtime.InteropServices;
 namespace Data_Model;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct Review
+public record Review
 {
-    public string review_id { get; init; }
-    
-    public Range review_title { get; init; }
+    [SerialField(Offset = 0, Count = 14)] public string review_id { get; init; } = string.Empty;
 
-    public Range review_content { get; init; }
+    //[RangeField("StringsIndex.bin", Offset = 14, Count = sizeof(long))]
+    //public string review_title { get; init; } = string.Empty;
+
+    //[RangeField("StringsIndex.bin", Offset = 22, Count = sizeof(long))]
+    //public string review_content { get; init; } = string.Empty;
 }
