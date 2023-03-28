@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Data_Model;
+namespace DataModel;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 public record User

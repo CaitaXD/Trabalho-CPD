@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Reflection;
 
-namespace Data_Model;
+namespace DataModel;
 
 public static class ObjectSerializer
 {

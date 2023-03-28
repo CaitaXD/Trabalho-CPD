@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Data_Model;
+namespace DataModel;
 
 public static class BinarySerializer
 {

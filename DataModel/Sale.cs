@@ -1,4 +1,4 @@
-﻿namespace Data_Model;
+﻿namespace DataModel;
 
 public record Sale
 {

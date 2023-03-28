@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using static System.Runtime.InteropServices.MemoryMarshal;
 
-namespace Data_Model;
+namespace DataModel;
 
 public class SerialFieldAttribute : Attribute
 {

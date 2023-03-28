@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Data_Model;
+namespace DataModel;
 
 public static class FileSave
 {

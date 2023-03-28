@@ -9,16 +9,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using CsvHelper;
 
-namespace Data_Model;
+namespace DataModel;
 
 public static class CsvSerializer
 {
-    public static IEnumerable<SalesCsv> ReadSalesFromFile(string filePath, Encoding? encoding = null, CultureInfo? culture = null)
-    {
-        return Serialize<SalesCsv>(filePath, encoding, culture);
-    }
-
-    private static IEnumerable<TType> Serialize<TType>(
+    public static IEnumerable<TType> Serialize<TType>(
         string       filePath,
         Encoding?    encoding = null,
         CultureInfo? culture  = null)

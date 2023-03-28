@@ -1,16 +1,18 @@
 ﻿#define TEST_1
 using System.Runtime.InteropServices;
-using Data_Model;
+using DataModel;
 
 
 const string inputPath  = @"C:\Users\caita\Desktop\amazon.csv";
 const string outputPath = @"C:\Users\caita\Desktop\Trab CPD\Files";
 
-var records = CsvSerializer.ReadSalesFromFile(inputPath);
+var records = CsvSerializer.Serialize<SalesCsv>(inputPath);
 
 
 #if TEST_1
-FileSave.WriteObjects(ObjectSerializer.GetEntities<Sale>(records), outputPath);
+
+var in_memory = ObjectSerializer.GetEntities<Sale>(records);
+FileSave.WriteObjects(in_memory, outputPath);
 
 
 var sales = FileSave.ReadObjects<Sale>(outputPath).ToArray();

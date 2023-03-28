@@ -2,7 +2,6 @@
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
-        <RootNamespace>Data_Model</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -16,6 +15,7 @@
 
     <ItemGroup>
       <PackageReference Include="JetBrains.Annotations" Version="2023.2.0-eap1" />
+      <PackageReference Include="UnmanagedExports" Version="1.2.7" />
     </ItemGroup>
 
 </Project>

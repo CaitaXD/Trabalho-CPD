@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace Data_Model;
+namespace DataModel;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 public record SalesCsv

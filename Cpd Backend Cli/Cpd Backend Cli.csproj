@@ -10,7 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Data Model\Data Model.csproj" />
+      <ProjectReference Include="..\DataModel\DataModel.csproj" />
     </ItemGroup>
 
 </Project>
