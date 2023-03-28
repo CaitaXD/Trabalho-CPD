@@ -13,12 +13,19 @@ namespace Data_Model;
 
 public static class CsvSerializer
 {
-    public static IEnumerable<TType> Serialize<TType>(
+    public static IEnumerable<SalesCsv> ReadSalesFromFile(string filePath, Encoding? encoding = null, CultureInfo? culture = null)
+    {
+        return Serialize<SalesCsv>(filePath, encoding, culture);
+    }
+
+    private static IEnumerable<TType> Serialize<TType>(
         string       filePath,
         Encoding?    encoding = null,
         CultureInfo? culture  = null)
         where TType : new()
     {
+        var set = new HashSet<TType>();
+
         var reader = new StreamReader(filePath, encoding ?? Encoding.Default);
 
         using var csv = new CsvReader(reader, culture ?? CultureInfo.InvariantCulture);
@@ -42,7 +49,7 @@ public static class CsvSerializer
 
                     property_info.SetValue(instance, values);
 
-                    yield return (TType)instance!;
+                    set.Add((TType)instance!);
                 }
                 else
                     switch (Type.GetTypeCode(property_info.PropertyType)) {
@@ -52,7 +59,7 @@ public static class CsvSerializer
                         string str       = ((string)record[property_info.Name]).Replace(",", "");
                         object value     = converter.ConvertFrom(str is "" ? "0" : str) ?? 0;
                         property_info.SetValue(instance, value);
-                        yield return (TType)instance!;
+                        set.Add((TType)instance!);
                         break;
                     }
                     case TypeCode.Single or TypeCode.Double or TypeCode.Decimal:
@@ -61,7 +68,7 @@ public static class CsvSerializer
                         string str       = ((string)record[property_info.Name]).Replace(',', '.');
                         object value     = converter.ConvertFrom(str) ?? 0;
                         property_info.SetValue(instance, value);
-                        yield return (TType)instance!;
+                        set.Add((TType)instance!);
                         break;
                     }
                     case TypeCode.Boolean:
@@ -69,13 +76,13 @@ public static class CsvSerializer
                         var    converter = TypeDescriptor.GetConverter(property_info.PropertyType);
                         object value     = converter.ConvertFrom(record[property_info.Name]) ?? false;
                         property_info.SetValue(instance, value);
-                        yield return (TType)instance!;
+                        set.Add((TType)instance!);
                         break;
                     }
                     case TypeCode.String:
                     {
                         property_info.SetValue(instance, (string)record[property_info.Name]);
-                        yield return (TType)instance!;
+                        set.Add((TType)instance!);
                         break;
                     }
                     default:
@@ -83,41 +90,7 @@ public static class CsvSerializer
                     }
             }
         }
-    }
-}
 
-public static class ObjectSerializer
-{
-    public static IEnumerable<TType> GetRecords<TType>(IEnumerable items)
-        where TType : new()
-    {
-        HashSet<TType> set = new();
-
-        var type = typeof(TType);
-        foreach (object item in items) {
-            TType instance = new();
-            foreach (var property_info in item.GetType().GetProperties()) {
-                object value = property_info.GetValue(item)!;
-
-                var instance_prop = type.GetProperty(property_info.Name);
-                if (instance_prop is null) continue;
-                if (!instance_prop.PropertyType.IsArray && property_info.PropertyType.IsArray) {
-                    foreach (object? val in (IEnumerable)value) {
-                        instance_prop.SetValue(instance, val);
-                    }
-
-                    set.Add(instance);
-                }
-                else {
-                    instance_prop.SetValue(instance, value);
-                    set.Add(instance);
-                }
-            }
-        }
-
-        var group = set.GroupBy(obj =>
-            type.GetProperties().First(propertyInfo => propertyInfo.Name.Contains("id")).GetValue(obj));
-
-        return group.Select(x => x.First());
+        return set;
     }
 }

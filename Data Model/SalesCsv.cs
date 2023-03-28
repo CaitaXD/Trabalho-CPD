@@ -1,10 +1,9 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 
 namespace Data_Model;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-public record Sale
+public record SalesCsv
 {
     public string product_id          { get; init; } = string.Empty;
     public string product_name        { get; init; } = string.Empty;
@@ -19,8 +18,8 @@ public record Sale
 
     public string[] review_id { get; init; } = Array.Empty<string>();
 
-    //public string[] review_title        { get; init; } = Array.Empty<string>();
-    //public string[] review_content      { get; init; } = Array.Empty<string>();
+    public string[] review_title        { get; init; } = Array.Empty<string>();
+    public string[] review_content      { get; init; } = Array.Empty<string>();
     public string[] user_id   { get; init; } = Array.Empty<string>();
     public string[] user_name { get; init; } = Array.Empty<string>();
 }

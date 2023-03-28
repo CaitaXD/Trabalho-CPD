@@ -10,7 +10,7 @@ using JetBrains.Annotations;
 namespace Data_Model;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-public record Product
+public record Product //: IEquatable<Product>
 {
     [SerialField(Offset = 0, Count = 10)] public string product_id { get; init; } = string.Empty;
 
@@ -40,4 +40,17 @@ public record Product
 
     [SerialField(Offset = 10 + 8 * sizeof(long), Count = sizeof(int))]
     public int rating_count { get; init; }
+    
+    
+    public virtual bool Equals(Product? other)
+    {
+        if (ReferenceEquals(null, other)) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return product_id == other.product_id;
+    }
+
+    public override int GetHashCode()
+    {
+        return product_id.GetHashCode();
+    }
 }

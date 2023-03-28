@@ -24,3 +24,15 @@ public class RangeFieldAttribute : Attribute
         IndexFile = indexFile;
     }
 }
+
+public class EntityFieldAttribute : Attribute
+{
+    public int    Offset    { get; init; }
+    public int    EnitySize     { get; init; }
+
+}
+
+
+public class EntityAttribute : Attribute
+{
+}

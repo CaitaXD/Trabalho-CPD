@@ -1,51 +1,110 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Data_Model;
 
 public static class BinarySerializer
 {
-    public static Span<byte> Serialize(object? obj, bool serializeStatic = false)
+    public const BindingFlags Size          = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+    public const BindingFlags Serialization = BindingFlags.Public | BindingFlags.Instance  | BindingFlags.Static;
+
+    public static Span<byte> Serialize(object? obj,
+        BindingFlags                           bindingFlags = Serialization)
     {
-        return CollectionsMarshal.AsSpan((List<byte>)SerializeObjectRecursive(obj, null, serializeStatic));
+        var bytes = (List<byte>)SerializeObjectRecursive(obj, new List<byte>(), bindingFlags);
+        return CollectionsMarshal.AsSpan(bytes);
     }
 
-    public static object? Deserialize(Span<byte> span, Type type)
+    public static object? Deserialize(Span<byte> bytes, Type type,
+        BindingFlags                             bindingFlags = Serialization)
     {
         if (type == typeof(string)) {
-            return System.Text.Encoding.UTF8.GetString(span);
+            return Encoding.UTF8.GetString(bytes);
         }
         else if (type.IsArray) {
-            return DeserializeArray(span, type);
+            return DeserializeArray(bytes, type);
+        }
+        else if (type.IsUnManaged()) {
+            return DeserializeUnManaged(bytes, type);
         }
         else {
-            return DeserializeBuiltIn(span, type);
+            return DeserializeObjectRecursive(bytes, type, bindingFlags);
         }
     }
 
-    public static object DeserializeArray(Span<byte> span, Type type)
+    public static object? DeserializeObjectRecursive(Span<byte> bytes, Type type,
+        BindingFlags                                            bindingFlags = Serialization)
     {
-        if (type.GetElementType() is { IsValueType: true } element_type) {
-            var array = Array.CreateInstance(element_type, span.Length / Marshal.SizeOf(element_type));
+        if (type == typeof(string)) {
+            return Encoding.UTF8.GetString(bytes);
+        }
+        else if (type.IsUnManaged()) {
+            return DeserializeUnManaged(bytes, type);
+        }
 
-            for (int i = 0; i < array.Length; i++) {
-                array.SetValue(DeserializeBuiltIn(span[(i * Marshal.SizeOf(element_type))..], element_type), i);
+        object? instance = Activator.CreateInstance(type);
+
+        var properties = type.GetProperties(bindingFlags);
+
+        foreach (var property in properties) {
+            var property_type = property.PropertyType;
+
+            if (property_type.IsUnManaged()) {
+                property.SetValue(instance, DeserializeUnManaged(bytes, property_type));
             }
+            else if (property_type.IsArray) {
+                property.SetValue(instance, DeserializeArray(bytes, property_type));
+            }
+            else {
+                property.SetValue(instance, DeserializeObjectRecursive(bytes, property_type, bindingFlags));
+            }
+        }
 
-            return array;
+        return instance;
+    }
+
+    public static object DeserializeArray(Span<byte> bytes, Type type)
+    {
+        var element_type = type.GetElementType()!;
+
+        var array = Array.CreateInstance(element_type, bytes.Length / SizeOf(element_type));
+
+        for (int i = 0; i < array.Length; i++) {
+            array.SetValue(Deserialize(bytes[(i * SizeOf(element_type))..], element_type), i);
+        }
+
+        return array;
+    }
+
+    public static int SizeOf(Type type,
+        BindingFlags              bindingFlags = Size)
+    {
+        if (type.TryMarshalSize(out int size)) {
+            return size;
         }
         else {
-            throw new NotSupportedException("Only value type arrays are currently supported.");
+            return type.GetFields(bindingFlags)
+                .Sum(f => SizeOf(f.FieldType));
         }
     }
 
-    private class U<T> where T : unmanaged
-    {
-    }
-
-    public static bool IsUnManaged(this Type t)
+    public static bool TryMarshalSize(this Type type, out int sizeOf)
     {
         try {
-            _ = typeof(U<>).MakeGenericType(t);
+            sizeOf = Marshal.SizeOf(type);
+            return true;
+        }
+        catch (Exception) {
+            sizeOf = default;
+            return false;
+        }
+    }
+
+    public static bool IsUnManaged(this Type type)
+    {
+        try {
+            _ = Marshal.SizeOf(type);
             return true;
         }
         catch (Exception) {
@@ -54,78 +113,74 @@ public static class BinarySerializer
     }
 
     // ReSharper disable once ReturnTypeCanBeEnumerable.Global
-    public static IList<byte> SerializeObjectRecursive(object? obj, IList<byte>? accumulatedBytes = null,
-        bool                                                   serializeStatic = false)
+    public static IList<byte> SerializeObjectRecursive(object? obj, IList<byte>? accumulator = null,
+        BindingFlags                                           bindingFlags = Serialization)
     {
         switch (obj) {
         case string str:
-            accumulatedBytes ??= new List<byte>();
-            accumulatedBytes.AddRange(System.Text.Encoding.UTF8.GetBytes(str));
-            return accumulatedBytes;
+            accumulator ??= new List<byte>();
+            accumulator.AddRange(Encoding.UTF8.GetBytes(str));
+            return accumulator;
         case null:
-            return accumulatedBytes ?? Array.Empty<byte>();
+            return accumulator ?? Array.Empty<byte>();
         }
 
-        accumulatedBytes ??= new List<byte>();
+        accumulator ??= new List<byte>();
         var type = obj.GetType();
 
         if (type.IsUnManaged()) {
-            accumulatedBytes.AddRange(SerializeBuiltIn(obj));
-            return accumulatedBytes;
+            accumulator.AddRange(SerializerUnManaged(obj));
+            return accumulator;
         }
 
-        var properties = type.GetProperties();
+        var properties = type.GetProperties(bindingFlags);
         foreach (var property in properties) {
-            if (serializeStatic == false && property.GetMethod?.IsStatic == true) {
-                continue;
-            }
-
             object? value         = property.GetValue(obj);
             var     property_type = property.PropertyType;
             if (value is null) {
-                accumulatedBytes.Add(0);
+                accumulator.Add(0);
             }
             else if (property_type.IsValueType) {
-                accumulatedBytes.AddRange(SerializeBuiltIn(value));
+                accumulator.AddRange(SerializerUnManaged(value));
             }
             else if (property_type.IsArray) {
-                SerializeArrayRecursive(value, accumulatedBytes);
+                SerializeArrayRecursive(value, accumulator);
             }
             else {
-                SerializeObjectRecursive(value, accumulatedBytes, serializeStatic);
+                SerializeObjectRecursive(value, accumulator, bindingFlags);
             }
         }
 
-        return accumulatedBytes;
+        return accumulator;
     }
 
     // ReSharper disable once ReturnTypeCanBeEnumerable.Global
-    public static IList<byte> SerializeArrayRecursive(object obj, IList<byte>? accumulatedBytes = null)
+    public static IList<byte> SerializeArrayRecursive(object obj, IList<byte>? accumulator = null)
     {
-        accumulatedBytes ??= new List<byte>();
+        accumulator ??= new List<byte>();
 
         var array        = (Array)obj;
         var element_type = obj.GetType().GetElementType()!;
 
         foreach (object item in array) {
             if (item is null) {
-                accumulatedBytes.Add(0);
+                accumulator.Add(0);
             }
             else if (element_type.IsValueType) {
-                accumulatedBytes.AddRange(SerializeBuiltIn(item));
+                accumulator.AddRange(SerializerUnManaged(item));
             }
             else if (item.GetType().IsArray) {
-                accumulatedBytes.AddRange(SerializeArrayRecursive(item, accumulatedBytes));
+                accumulator.AddRange(SerializeArrayRecursive(item, accumulator));
             }
             else {
-                accumulatedBytes.AddRange(SerializeObjectRecursive(item, accumulatedBytes));
+                accumulator.AddRange(SerializeObjectRecursive(item, accumulator));
             }
         }
 
-        return accumulatedBytes;
+        return accumulator;
     }
 
-    static byte[] SerializeBuiltIn(object obj)
+    static byte[] SerializerUnManaged(object obj)
     {
         int    size = Marshal.SizeOf(obj);
         byte[] arr  = new byte[size];
@@ -139,7 +194,7 @@ public static class BinarySerializer
         return arr;
     }
 
-    static object? DeserializeBuiltIn(Span<byte> arr, Type type)
+    static object? DeserializeUnManaged(Span<byte> arr, Type type)
     {
         int     size = Marshal.SizeOf(type);
         nint    ptr  = Marshal.AllocHGlobal(size);

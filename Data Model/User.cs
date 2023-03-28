@@ -11,4 +11,5 @@ public record User
 
     [RangeField("StringsIndex.bin", Offset = 28, Count = sizeof(long))]
     public string user_name { get; init; } = string.Empty;
+    
 }
