@@ -73,7 +73,7 @@ public static class BinarySerializer
         for (int i = 0; i < array.Length; i++) {
             array.SetValue(Deserialize(bytes[(i * SizeOf(element_type))..], element_type), i);
         }
-
+        
         return array;
     }
 

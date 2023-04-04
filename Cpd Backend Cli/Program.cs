@@ -10,15 +10,18 @@ var records = CsvSerializer.Serialize<SalesCsv>(inputPath);
 
 
 #if TEST_1
+BinarySalesConverter.WriteSale("""
+        "Begin!!!,\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",1000,\"\",\"\",\"\",\"\",\"\",", "."
+        """,
+        outputPath, FileMode.Create);
+BinarySalesConverter.CsvToBinaryFiles(inputPath, outputPath);
+BinarySalesConverter.WriteSale("""
+        "End!!!,\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",1000,\"\",\"\",\"\",\"\",\"\",", "."
+        """,
+        outputPath);
+var sales = BinarySalesConverter.BinaryFilesToObjects(outputPath);
 
-var in_memory = ObjectSerializer.GetEntities<Sale>(records);
-FileSave.WriteObjects(in_memory, outputPath);
-
-
-var sales = FileSave.ReadObjects<Sale>(outputPath).ToArray();
-
-
-Console.WriteLine(string.Join(Environment.NewLine, sales.AsEnumerable()));
+Console.WriteLine(string.Join(Environment.NewLine, sales.Select(x => x.Product.product_id)));
 #endif
 
 
