@@ -10,7 +10,7 @@ public static class FileSave
         where TType : new()
     {
         var    type       = typeof(TType);
-        var    file       = File.OpenRead(Path.Combine(directory, $"{type.Name}.bin"));
+        using var    file       = File.OpenRead(Path.Combine(directory, $"{type.Name}.bin"));
         var    properties = type.GetProperties();
         byte[] buffer     = new byte[1024];
 
@@ -117,10 +117,11 @@ public static class FileSave
         return BinarySerializer.Deserialize(bytes, type);
     }
 
-    public static void WriteObjects<TType>(IEnumerable<TType> values, string directory)
+    public static void WriteObjects<TType>(IEnumerable<TType> values, string directory, FileMode fileMode = FileMode.Append)
     {
         var       type = typeof(TType);
-        using var file = File.Create(Path.Combine(directory, $"{type.Name}.bin"));
+        
+        using var file = File.Open(Path.Combine(directory, $"{type.Name}.bin"), fileMode);
 
         var properties = type.GetProperties();
 
@@ -152,7 +153,7 @@ public static class FileSave
                 var       entity_type = property_value!.GetType();
                 var       entity_properties = entity_type.GetProperties();
                 using var entity_file = File.Open(Path.Combine(directory, $"{entity_type.Name}.bin"), FileMode.Append);
-                int       offset = (int)entity_file.Position;
+                int       offset = (int)entity_file.Position - entity_field_attribute.EnitySize;
                 file.Write(BinarySerializer.Serialize(offset));
                 WriteObjectProprieties(directory, entity_properties, property_value, entity_file);
             }
