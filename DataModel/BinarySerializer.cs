@@ -133,6 +133,10 @@ public static class BinarySerializer
             return accumulator;
         }
 
+        if(type.IsArray) {
+            return SerializeArrayRecursive(obj, accumulator);
+        }
+        
         var properties = type.GetProperties(bindingFlags);
         foreach (var property in properties) {
             object? value         = property.GetValue(obj);

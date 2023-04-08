@@ -1,6 +1,8 @@
 ﻿using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
+using DataModel.DataStructures.Generic;
 
 namespace DataModel;
 
@@ -9,10 +11,10 @@ public static class FileSave
     public static IEnumerable<TType> ReadObjects<TType>(string directory)
         where TType : new()
     {
-        var    type       = typeof(TType);
-        using var    file       = File.OpenRead(Path.Combine(directory, $"{type.Name}.bin"));
-        var    properties = type.GetProperties();
-        byte[] buffer     = new byte[1024];
+        var       type       = typeof(TType);
+        using var file       = File.OpenRead(Path.Combine(directory, $"{type.Name}.bin"));
+        var       properties = type.GetProperties();
+        byte[]    buffer     = new byte[1024];
 
 
         while (file.Position < file.Length) {
@@ -117,10 +119,11 @@ public static class FileSave
         return BinarySerializer.Deserialize(bytes, type);
     }
 
-    public static void WriteObjects<TType>(IEnumerable<TType> values, string directory, FileMode fileMode = FileMode.Append)
+    public static void WriteObjects<TType>(IEnumerable<TType> values, string directory,
+        FileMode                                              fileMode = FileMode.Append)
     {
-        var       type = typeof(TType);
-        
+        var type = typeof(TType);
+
         using var file = File.Open(Path.Combine(directory, $"{type.Name}.bin"), fileMode);
 
         var properties = type.GetProperties();
