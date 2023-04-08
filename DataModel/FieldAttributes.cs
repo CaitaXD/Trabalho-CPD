@@ -25,9 +25,20 @@ public class RangeFieldAttribute : Attribute
     }
 }
 
+public class PtriciaIndexAttribute : Attribute
+{
+    public string IndexFile { get; init; }
+    public int    Offset    { get; init; }
+    public int    Count     { get; init; }
+
+    public PtriciaIndexAttribute(string indexFile)
+    {
+        IndexFile = indexFile;
+    }
+}
+
 public class EntityFieldAttribute : Attribute
 {
-    public int    Offset    { get; init; }
-    public int    EnitySize     { get; init; }
-
+    public int Offset    { get; init; }
+    public int EnitySize { get; init; }
 }

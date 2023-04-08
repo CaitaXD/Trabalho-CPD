@@ -48,6 +48,12 @@ public static class FileSave
 
                     property_info.SetValue(instance, value);
                 }
+                else if (property_info.GetCustomAttribute<PtriciaIndexAttribute>() is { } trie_field_attribute) {
+                    using var trie_file =
+                        File.OpenRead(Path.Combine(directory, $"{property_info.PropertyType.Name}.bin"));
+
+                    throw new NotImplementedException();
+                }
             }
 
             yield return instance;
@@ -156,9 +162,15 @@ public static class FileSave
                 var       entity_type = property_value!.GetType();
                 var       entity_properties = entity_type.GetProperties();
                 using var entity_file = File.Open(Path.Combine(directory, $"{entity_type.Name}.bin"), FileMode.Append);
-                int       offset = (int)entity_file.Position - entity_field_attribute.EnitySize;
+                int       offset = (int)entity_file.Position;
                 file.Write(BinarySerializer.Serialize(offset));
                 WriteObjectProprieties(directory, entity_properties, property_value, entity_file);
+            }
+            else if (property_info.GetCustomAttribute<PtriciaIndexAttribute>() is { } patricia_index) {
+                using var patricia_index_file = File.Open(Path.Combine(directory, $"{patricia_index.IndexFile}.bin"),
+                    FileMode.Append);
+                
+                throw new NotImplementedException();
             }
         }
     }
