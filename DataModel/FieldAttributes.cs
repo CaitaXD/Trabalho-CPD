@@ -31,8 +31,3 @@ public class EntityFieldAttribute : Attribute
     public int    EnitySize     { get; init; }
 
 }
-
-
-public class EntityAttribute : Attribute
-{
-}
