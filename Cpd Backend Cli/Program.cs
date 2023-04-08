@@ -31,10 +31,34 @@ foreach (var sale in ordered_by_users.Take(10))
 
 #if TEST_2
 
-var file = new FileStream(@"C:\Users\caita\Desktop\prefix_tree.bin", FileMode.Open);
-var prefix_tree = new PatriciaStream(file);
+// var file = new FileStream(@"C:\Users\caita\Desktop\prefix_tree.bin", FileMode.Open);
+// var prefix_tree = new PatriciaStream(file);
+//
+// Console.WriteLine(prefix_tree.PrettyString());
 
-Console.WriteLine(prefix_tree.PrettyString());
 
+var trie = new Patricia
+{
+    "A",
+    "Acolyte",
+    "Acolyte of the Void",
+    "Archer",
+    "Bills",
+    "Bills of the Void",
+    "Bills of the Void Archer",
+    "Void",
+    "Void Archer",
+    "Void Archer Acolyte",
+    "Hello",
+    "Hello World",
+    "Hurricane",
+};
 
+//Console.WriteLine(string.Join("\n", trie));
+//
+//
+//
+// Console.WriteLine(trie.PrettyString());
+
+Console.WriteLine(string.Join("\n", trie.Retrieve("H")));
 #endif

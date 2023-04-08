@@ -103,7 +103,7 @@ public static partial class PatriciaExtension
         }
     }
 
-    public static void ReadFromFile(this Patricia patricia, FileStream fileStream, Encoding? encoding = null)
+    public static void ReadFromFile(this Patricia patricia, Stream fileStream, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
         using var reader = new BinaryReader(fileStream);
@@ -151,8 +151,7 @@ public static partial class PatriciaExtension
         ArrayPool<byte>.Shared.Return(buffer);
     }
 
-
-    public static void AddWordTrieFile(Stream fileStream, string word, Encoding? encoding = null)
+    public static int AddWordTrieFile(Stream fileStream, string word, Encoding? encoding = null)
     {
         // Read the contents of the file into memory and construct the trie
         byte[] buffer = new byte[fileStream.Length];
@@ -169,6 +168,7 @@ public static partial class PatriciaExtension
         var writer = new BinaryWriter(fileStream, encoding ?? Encoding.UTF8);
         writer.Write(trie.Serialize());
         writer.Flush();
+        return (int)fileStream.Position;
     }
 
     public static string PrettyString(Stream fileStream)

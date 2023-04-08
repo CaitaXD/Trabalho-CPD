@@ -25,13 +25,13 @@ public class RangeFieldAttribute : Attribute
     }
 }
 
-public class PtriciaIndexAttribute : Attribute
+public class PatriciaFieldAttribute : Attribute
 {
     public string IndexFile { get; init; }
     public int    Offset    { get; init; }
     public int    Count     { get; init; }
 
-    public PtriciaIndexAttribute(string indexFile)
+    public PatriciaFieldAttribute(string indexFile)
     {
         IndexFile = indexFile;
     }

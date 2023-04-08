@@ -8,8 +8,8 @@ public static class ObjectSerializer
     public static IEnumerable<TType> GetEntities<TType>(IEnumerable records)
         where TType : new() =>
         GetEntities(typeof(TType), records).OfType<TType>();
-    
-    private static IEnumerable<object> GetEntities(Type type, IEnumerable records)
+
+    static IEnumerable<object> GetEntities(Type type, IEnumerable records)
     {
         HashSet<object> set        = new();
         var             properties = type.GetProperties();
@@ -32,7 +32,8 @@ public static class ObjectSerializer
 
         return set;
     }
-    private static void AddProprietyRecursive(object instance, object proprietaryValue,
+
+    static void AddProprietyRecursive(object instance, object proprietaryValue,
         HashSet<object>?                            processedObjects = null)
     {
         var type      = instance.GetType();
@@ -75,7 +76,8 @@ public static class ObjectSerializer
             }
         }
     }
-    private static IEnumerable<object> GetRecords(Type type, object item)
+
+    static IEnumerable<object> GetRecords(Type type, object item)
     {
         object instance  = Activator.CreateInstance(type)!;
         var    item_type = item.GetType();
@@ -99,7 +101,8 @@ public static class ObjectSerializer
             }
         }
     }
-    private static IEnumerable<object> GetRecords(Type type, IEnumerable<object> items)
+
+    static IEnumerable<object> GetRecords(Type type, IEnumerable<object> items)
     {
         HashSet<object> set = new();
 

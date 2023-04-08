@@ -49,11 +49,18 @@ public static class FileSave
 
                     property_info.SetValue(instance, value);
                 }
-                else if (property_info.GetCustomAttribute<PtriciaIndexAttribute>() is { } trie_field_attribute) {
+                else if (property_info.GetCustomAttribute<PatriciaFieldAttribute>() is { } trie_field_attribute) {
                     using var trie_file =
                         File.OpenRead(Path.Combine(directory, $"{property_info.PropertyType.Name}.bin"));
 
-                    throw new NotImplementedException();
+                    var patricia_stream = new PatriciaStream(trie_file);
+
+                    if (property_info.PropertyType == typeof(string)) {
+
+                    }
+                    else {
+                        throw new NotImplementedException();
+                    }
                 }
             }
 
@@ -61,10 +68,10 @@ public static class FileSave
         }
     }
 
-    private static object? ReadEntity<TIndex>(Type type, Stream entityIndexFile, Stream indexFile,
-        EntityFieldAttribute                       attribute,
-        byte[]                                     buffer,
-        string                                     directory)
+    static object? ReadEntity<TIndex>(Type type, Stream entityIndexFile, Stream indexFile,
+        EntityFieldAttribute               attribute,
+        byte[]                             buffer,
+        string                             directory)
         where TIndex : unmanaged
     {
         var bytes_index = buffer.AsSpan(attribute.Offset, Unsafe.SizeOf<TIndex>());
@@ -106,16 +113,16 @@ public static class FileSave
         return instance;
     }
 
-    private static object? ReadSerial(Type type, Stream stream, SerialFieldAttribute serial,
-        Span<byte>                         buffer)
+    static object? ReadSerial(Type type, Stream stream, SerialFieldAttribute serial,
+        Span<byte>                 buffer)
     {
         var spn = buffer.Slice(serial.Offset, serial.Count);
         stream.ReadExactly(spn);
         return BinarySerializer.Deserialize(spn, type);
     }
 
-    private static object? ReadIndexed(Type type, Stream indexFile, Stream objectFile,
-        Span<byte>                          indexBytes)
+    static object? ReadIndexed(Type type, Stream indexFile, Stream objectFile,
+        Span<byte>                  indexBytes)
     {
         indexFile.ReadExactly(indexBytes);
         var range = MemoryMarshal.Read<Range>(indexBytes);
@@ -140,9 +147,9 @@ public static class FileSave
         }
     }
 
-    private static void WriteObjectProprieties<TType>(string directory, IEnumerable<PropertyInfo> properties,
-        TType                                                value,
-        Stream                                               file)
+    static void WriteObjectProprieties<TType>(string directory, IEnumerable<PropertyInfo> properties,
+        TType                                        value,
+        Stream                                       file)
     {
         foreach (var property_info in properties) {
             object? property_value = property_info.GetValue(value);
@@ -167,23 +174,34 @@ public static class FileSave
                 file.Write(BinarySerializer.Serialize(offset));
                 WriteObjectProprieties(directory, entity_properties, property_value, entity_file);
             }
-            else if (property_info.GetCustomAttribute<PtriciaIndexAttribute>() is { } patricia_index) {
+
+            else if (property_info.GetCustomAttribute<PatriciaFieldAttribute>() is { } patricia_index) {
                 using var patricia_index_file = File.Open(Path.Combine(directory, $"{patricia_index.IndexFile}.bin"),
                     FileMode.Append);
-                
+
                 var patricia_stream = new PatriciaStream(patricia_index_file);
+
+                if (property_value is string str) {
+                    int offset      = (int)patricia_stream.BaseStream.Position;
+                    int written     = patricia_stream.Add(str);
+                    var index_bytes = BinarySerializer.Serialize(offset..written);
+                    file.Write(index_bytes);
+                }
+                else {
+                    throw new NotImplementedException();
+                }
             }
         }
     }
 
-    private static int WriteObject(object? value, Stream fileStream)
+    static int WriteObject(object? value, Stream fileStream)
     {
         var bytes = BinarySerializer.Serialize(value);
         fileStream.Write(bytes);
         return bytes.Length;
     }
 
-    private static int WriteIndexedObject<TIndex>(object? value, Stream stream, Stream indexStream)
+    static int WriteIndexedObject<TIndex>(object? value, Stream stream, Stream indexStream)
         where TIndex : unmanaged
     {
         var index_type = typeof(TIndex);

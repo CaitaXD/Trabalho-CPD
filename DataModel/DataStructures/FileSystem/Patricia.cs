@@ -1,21 +1,24 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Text;
 
 namespace DataModel.DataStructures.FileSystem;
 
 public class PatriciaStream : ITRie<string>
 {
-    readonly Encoding _encoding   = Encoding.UTF8;
-    readonly Stream   _stream;
+    readonly Patricia    _buffer       = new();
+    bool                     _pendingWrite = false;
+    readonly        Encoding _encoding     = Encoding.UTF8;
+    public readonly Stream   BaseStream;
 
-    public PatriciaStream(Stream stream)
+    public PatriciaStream(Stream baseStream)
     {
-        _stream = stream;
+        BaseStream = baseStream;
     }
 
     public PatriciaStream(string path, FileMode mode)
     {
-        _stream = File.Open(path, mode);
+        BaseStream = File.Open(path, mode);
     }
 
     public IEnumerator<string> GetEnumerator()
@@ -28,18 +31,35 @@ public class PatriciaStream : ITRie<string>
         return GetEnumerator();
     }
 
-    public void Add(string key)
+    public int Add(string key)
     {
-        PatriciaExtension.AddWordTrieFile(_stream, key, _encoding);
+        _pendingWrite = true;
+        return _buffer.Add(key);
+    }
+
+    public void FLush()
+    {
+        if (_pendingWrite) {
+            var patricia = new Patricia();
+            patricia.ReadFromFile(BaseStream, _encoding);
+            foreach (string key in _buffer) {
+                patricia.Add(key); 
+            }
+
+            _buffer.Clear();
+            _pendingWrite = false;
+        }
     }
 
     public IEnumerable<string> Retrieve(string prefix)
     {
-        return PatriciaExtension.RetrieveTrieFile(_stream, prefix, _encoding);
+        FLush();
+        
+        return PatriciaExtension.RetrieveTrieFile(BaseStream, prefix, _encoding);
     }
 
     public string PrettyString()
     {
-        return PatriciaExtension.PrettyString(_stream);
+        return PatriciaExtension.PrettyString(BaseStream);
     }
 }
