@@ -54,11 +54,9 @@ var trie = new Patricia
     "Hurricane",
 };
 
-//Console.WriteLine(string.Join("\n", trie));
-//
-//
-//
-// Console.WriteLine(trie.PrettyString());
+Console.WriteLine(string.Join("\n", trie));
 
-Console.WriteLine(string.Join("\n", trie.Retrieve("H")));
+Console.WriteLine(trie.PrettyString());
+
+Console.WriteLine(string.Join(", ", trie.Retrieve("A")));
 #endif

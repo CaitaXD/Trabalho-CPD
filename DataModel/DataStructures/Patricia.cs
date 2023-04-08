@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Reflection.Metadata;
 using System.Text;
 
 namespace DataModel.DataStructures;
@@ -36,7 +37,6 @@ public class Patricia : ITRie<string>
         return 0;
     }
 
-
     public void Clear()
     {
         Root = new Node();
@@ -44,45 +44,33 @@ public class Patricia : ITRie<string>
 
     public List<string> Retrieve(string prefix)
     {
-        var results = new List<string>();
-        var word    = new StringBuilder();
-
+        var result       = new List<string>();
         var current_node = Root;
 
-        var children = current_node.Children.Where(child => child.Key.CommonPrefix(prefix));
-
-        foreach (var child in children) {
-            word.Append(child.Key);
-            if (child.Value.IsEndOfWord) {
-                results.Add(word.ToString());
+        foreach (var (word, child) in current_node.Children.Where(child => child.Key.CommonPrefix(prefix))) {
+            foreach (string new_word in RetrieveWordsFromNode(child, word)) {
+                if (new_word.StartsWith(prefix)) {
+                    result.Add(new_word);
+                }
             }
-        
-            string new_prefix = string.IsNullOrEmpty(prefix) ? "" : string.Concat(prefix.Skip(child.Key.Length));
-
-            Retrieve(child.Value, new_prefix, results, word);
-            word.Length -= child.Key.Length;
         }
-    
-        return results;
+
+        return result;
     }
 
-    static void Retrieve(Node node, string prefix, ICollection<string> results, StringBuilder word)
+    static IEnumerable<string> RetrieveWordsFromNode(Node node, string prefix)
     {
-        var children = node.Children.Where(child => child.Key.CommonPrefix(prefix));
+        if (node.IsEndOfWord) {
+            yield return prefix;
+        }
 
-        foreach (var child in children) {
-            word.Append(child.Key);
-            if (child.Value.IsEndOfWord) {
-                results.Add(word.ToString());
+        foreach (var child in node.Children) {
+            string child_prefix = prefix + child.Key;
+            foreach (string word in RetrieveWordsFromNode(child.Value, child_prefix)) {
+                yield return word;
             }
-
-            string new_prefix = string.IsNullOrEmpty(prefix) ? "" : string.Concat(prefix.Skip(child.Key.Length));
-
-            Retrieve(child.Value, new_prefix, results, word);
-            word.Length -= child.Key.Length;
         }
     }
-
 
     IEnumerable<string> ITRie<string>.Retrieve(string prefix)
     {
@@ -91,26 +79,7 @@ public class Patricia : ITRie<string>
 
     public IEnumerator<string> GetEnumerator()
     {
-        var stack = new Stack<ValueTuple<Node, string?>>();
-        var words = new SortedSet<string>();
-
-        stack.Push(new ValueTuple<Node, string?>(Root, null));
-
-        while (stack.Count > 0) {
-            (var node, string? prefix) = stack.Pop();
-
-            if (node.IsEndOfWord && prefix != null) {
-                words.Add(prefix);
-            }
-
-            foreach (var child in node.Children) {
-                stack.Push(new ValueTuple<Node, string>(child.Value, prefix + child.Key));
-            }
-        }
-
-        foreach (string word in words) {
-            yield return word;
-        }
+        return Retrieve("").GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator()
