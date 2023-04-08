@@ -2,7 +2,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using DataModel.DataStructures.Generic;
+using DataModel.DataStructures;
+using DataModel.DataStructures.FileSystem;
 
 namespace DataModel;
 
@@ -170,7 +171,7 @@ public static class FileSave
                 using var patricia_index_file = File.Open(Path.Combine(directory, $"{patricia_index.IndexFile}.bin"),
                     FileMode.Append);
                 
-                throw new NotImplementedException();
+                var patricia_stream = new PatriciaStream(patricia_index_file);
             }
         }
     }

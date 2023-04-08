@@ -26,7 +26,7 @@ public record SalesCsv
     
     public static SalesCsv Parse(string line)
     {
-        var values = line.Split(',');
+        string[]? values = line.Split(',');
 
         return new SalesCsv {
             product_id          = values[0],

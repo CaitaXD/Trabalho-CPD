@@ -1,16 +1,17 @@
-﻿#define TEST_1
+﻿#define TEST_2
 using System.Runtime.InteropServices;
+using System.Text;
 using DataModel;
-using DataModel.DataStructures.Generic;
-
-const string inputPath  = @"C:\Users\caita\Desktop\amazon.csv";
-const string outputPath = @"C:\Users\caita\Desktop\Trab CPD\Files";
-
-var records = CsvSerializer.Serialize<SalesCsv>(inputPath);
+using DataModel.DataStructures;
+using DataModel.DataStructures.FileSystem;
 
 
 #if TEST_1
+const string inputPath = @"C:\Users\caita\Desktop\amazon.csv";
+const string outputPath = @"C:\Users\caita\Desktop\Trab CPD\Files";
 
+
+var records = CsvSerializer.Serialize<SalesCsv>(inputPath);
 BinarySalesConverter.CsvToBinaryFiles(inputPath, outputPath);
 
 var sales = BinarySalesConverter.BinaryFilesToObjects(outputPath);
@@ -30,37 +31,10 @@ foreach (var sale in ordered_by_users.Take(10))
 
 #if TEST_2
 
-var prefix_tree = new PatriciaTrie<char>
-{
-    "Bob",
-    "Bobby",
-    "Bobby Tables",
-    "Bobby Tables (on drugs)",
-    "Alice",
-    "Alice in Wonderland",
-    "Help",
-    "Help me",
-    "Help me Obi-Wan Kenobi",
-    "Help me Obi-Wan Kenobi, you're my only hope",
-    "Hello",
-    "Hello World",
-    "Hello World!",
-    "Hello World! (on drugs)",
-    "Hello, There",
-    "Hello, There",
-    "Hello, There!",
-    "General Kenobi",
-};
+var file = new FileStream(@"C:\Users\caita\Desktop\prefix_tree.bin", FileMode.Open);
+var prefix_tree = new PatriciaStream(file);
 
-prefix_tree.WriteToFile(@"C:\Users\caita\Desktop\prefix_tree.bin");
+Console.WriteLine(prefix_tree.PrettyString());
 
-var prefix_tree2 = new PatriciaTrie<char>();
-prefix_tree2.ReadFromFile(@"C:\Users\caita\Desktop\prefix_tree.bin");
-
-Console.WriteLine(prefix_tree2.PrettyString());
-
-foreach (var item in prefix_tree2.Retrieve("H")) {
-    Console.WriteLine(item);
-}
 
 #endif
