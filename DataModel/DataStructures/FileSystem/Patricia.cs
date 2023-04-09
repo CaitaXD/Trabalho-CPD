@@ -1,12 +1,13 @@
 ﻿using System.Buffers;
 using System.Collections;
+using System.Numerics;
 using System.Text;
 
 namespace DataModel.DataStructures.FileSystem;
 
-public class PatriciaStream : ITRie<string>
+public class PatriciaStream : ITRie<string>, IDisposable
 {
-    readonly Patricia    _buffer       = new();
+    public readonly Patricia Buffer        = new();
     bool                     _pendingWrite = false;
     readonly        Encoding _encoding     = Encoding.UTF8;
     public readonly Stream   BaseStream;
@@ -34,32 +35,71 @@ public class PatriciaStream : ITRie<string>
     public int Add(string key)
     {
         _pendingWrite = true;
-        return _buffer.Add(key);
+        return Buffer.Add(key);
     }
 
     public void FLush()
     {
-        if (_pendingWrite) {
-            var patricia = new Patricia();
-            patricia.ReadFromFile(BaseStream, _encoding);
-            foreach (string key in _buffer) {
-                patricia.Add(key); 
-            }
-
-            _buffer.Clear();
-            _pendingWrite = false;
-        }
+        if (!_pendingWrite) return;
+        Buffer.Write(BaseStream, _encoding);
+        _pendingWrite = false;
     }
 
     public IEnumerable<string> Retrieve(string prefix)
     {
-        FLush();
+        BaseStream.Seek(0, SeekOrigin.Begin);
         
-        return PatriciaExtension.RetrieveTrieFile(BaseStream, prefix, _encoding);
-    }
+        var nodes = PatriciaExtension.ReadNodes(BaseStream, _encoding);
 
+        var root = nodes.FirstOrDefault() ?? new Patricia.Node();
+        
+        foreach (string word in root.Retrieve(prefix)) {
+            yield return word;
+        }
+    }
     public string PrettyString()
     {
-        return PatriciaExtension.PrettyString(BaseStream);
+        BaseStream.Seek(0, SeekOrigin.Begin);
+        
+        var nodes = PatriciaExtension.ReadNodes(BaseStream, _encoding);
+        
+        var root = nodes.FirstOrDefault() ?? new Patricia.Node();
+        
+        return root.PrettyString();
+    }
+
+    public IEnumerable<Patricia.Node> Traverse()
+    {
+        BaseStream.Seek(0, SeekOrigin.Begin);
+        
+        var nodes = PatriciaExtension.ReadNodes(BaseStream, _encoding);
+
+        var patricia = new Patricia
+        {
+            Root = nodes.FirstOrDefault() ?? new Patricia.Node()
+        };
+        
+        foreach (var node in patricia.Traverse()) {
+            yield return node;
+        }
+    }
+    public string Decode(int key)
+    {
+        BaseStream.Seek(0, SeekOrigin.Begin);
+        
+        var nodes = PatriciaExtension.ReadNodes(BaseStream, _encoding);
+
+        var patricia = new Patricia
+        {
+            Root = nodes.FirstOrDefault() ?? new Patricia.Node()
+        };
+
+        return patricia.Decode(key);
+    }
+    public void Dispose()
+    {
+        BaseStream.Dispose();
+        GC.SuppressFinalize(this);
+        FLush();
     }
 }

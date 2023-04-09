@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Numerics;
 using System.Reflection.Metadata;
 using System.Text;
 
@@ -15,26 +16,44 @@ public class Patricia : ITRie<string>
 
     public int Add(string key)
     {
-        var current_node = Root;
-        int index        = 0;
-        while (index < key.Length) {
-            int copy = index;
-            var filtered_children =
-                current_node.Children.Where(valuePair => key[copy..].StartsWith(valuePair.Key));
-            foreach (var child in filtered_children) {
-                current_node =  child.Value;
-                index        += child.Key.Length;
+        var node = Root;
+        for (int i = 0; i < key.Length;) {
+            int offset = i;
+            var children = node.Children.Where(valuePair => key[offset..].StartsWith(valuePair.Key));
+
+            var arr = children.ToArray();
+            foreach (var (word, child) in arr) {
+                node =  child;
+                i        += word.Length;
                 goto continueLoop;
             }
 
-            current_node.Children[key[index..]] = new Node();
-            current_node                        = current_node.Children[key[index..]];
-            index                               = key.Length;
+            node.Children[key[i..]] = new Node();
+            node                        = node.Children[key[i..]];
+            i                               = key.Length;
+
             continueLoop: ;
         }
 
-        current_node.IsEndOfWord = true;
-        return 0;
+        node.IsEndOfWord = true;
+        Root.WriteEncodings();
+
+        return node.Id;
+    }
+
+    Node? Find(string word)
+    {
+        return Root.Find(word);
+    }
+
+    public int Encode(string word)
+    {
+        return Find(word)?.Id ?? -1;
+    }
+
+    public string Decode(int encoded)
+    {
+        return Root.Decode(encoded);
     }
 
     public void Clear()
@@ -42,34 +61,9 @@ public class Patricia : ITRie<string>
         Root = new Node();
     }
 
-    public List<string> Retrieve(string prefix)
+    public IEnumerable<string> Retrieve(string prefix)
     {
-        var result       = new List<string>();
-        var current_node = Root;
-
-        foreach (var (word, child) in current_node.Children.Where(child => child.Key.CommonPrefix(prefix))) {
-            foreach (string new_word in RetrieveWordsFromNode(child, word)) {
-                if (new_word.StartsWith(prefix)) {
-                    result.Add(new_word);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    static IEnumerable<string> RetrieveWordsFromNode(Node node, string prefix)
-    {
-        if (node.IsEndOfWord) {
-            yield return prefix;
-        }
-
-        foreach (var child in node.Children) {
-            string child_prefix = prefix + child.Key;
-            foreach (string word in RetrieveWordsFromNode(child.Value, child_prefix)) {
-                yield return word;
-            }
-        }
+        return Root.Retrieve(prefix);
     }
 
     IEnumerable<string> ITRie<string>.Retrieve(string prefix)
@@ -87,38 +81,145 @@ public class Patricia : ITRie<string>
         return GetEnumerator();
     }
 
-    public static void PrettyString(Node node, string prefix, StringBuilder? stringBuilder)
+    public IEnumerable<Node> Traverse()
     {
-        stringBuilder ??= new StringBuilder();
-        foreach (var child in node.Children) {
-            stringBuilder.Append(prefix);
-            foreach (char item in child.Key) {
-                stringBuilder.Append(item);
-            }
-
-            stringBuilder.Append(child.Value.IsEndOfWord ? "*" : "");
-            stringBuilder.Append(Environment.NewLine);
-            PrettyString(child.Value, prefix + "  ", stringBuilder);
-        }
+        return Root.Traverse();
     }
 
     public string PrettyString()
     {
-        var string_builder = new StringBuilder();
-        PrettyString(Root, "", string_builder);
-
-        return string_builder.ToString();
+        return Root.PrettyString();
     }
 
-    public class Node
+    public class Node : IEnumerable<(string, Node)>
     {
         public IDictionary<string, Node> Children    { get; private set; }
         public bool                      IsEndOfWord { get; set; }
 
+        public int Id { get; set; }
+
         public Node()
         {
-            Children    = new SortedDictionary<string, Node>();
+            Children    = new SortedList<string, Node>();
             IsEndOfWord = false;
+        }
+
+        public IEnumerable<Node> Traverse()
+        {
+            if (IsEndOfWord) {
+                yield break;
+            }
+
+            foreach (var (_, child) in Children) {
+                foreach (var n_node in child.Traverse()) {
+                    yield return n_node;
+                }
+            }
+        }
+
+        public IEnumerator<(string, Node)> GetEnumerator()
+        {
+            foreach (var (key, value) in Children) {
+                yield return (key, value);
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        public Node? Find(ReadOnlySpan<char> word)
+        {
+            if (word.Length == 0) {
+                return this;
+            }
+
+            if (IsEndOfWord) {
+                return null;
+            }
+
+            foreach (var (char_value, child) in Children) {
+                if (word.StartsWith(char_value)) {
+                    if (word.Length == char_value.Length) {
+                        return child;
+                    }
+                    else {
+                        return child.Find(word[char_value.Length..]);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public IEnumerable<string> Retrieve(string prefix)
+        {
+            return Retrieve(new StringBuilder(prefix));
+        }
+
+        IEnumerable<string> Retrieve(StringBuilder? prefix = null)
+        {
+            prefix ??= new StringBuilder();
+
+            if (IsEndOfWord) {
+                yield return prefix.ToString();
+            }
+
+            foreach (var (str, child) in Children) {
+                prefix.Append(str);
+                foreach (string word in child.Retrieve(prefix)) {
+                    yield return word;
+                }
+            }
+        }
+
+        public string PrettyString()
+        {
+            var string_builder = new StringBuilder();
+            PrettyString("", string_builder);
+            return string_builder.ToString();
+        }
+
+        void PrettyString(string prefix, StringBuilder? stringBuilder)
+        {
+            stringBuilder ??= new StringBuilder();
+            foreach (var child in Children) {
+                stringBuilder.Append(prefix);
+                foreach (char item in child.Key) {
+                    stringBuilder.Append(item);
+                }
+
+                stringBuilder.Append(child.Value.IsEndOfWord ? "*" : "");
+                stringBuilder.Append(Environment.NewLine);
+                child.Value.PrettyString(prefix + "  ", stringBuilder);
+            }
+        }
+
+        public string Decode(int encoded, StringBuilder? sb = null)
+        {
+            sb ??= new StringBuilder();
+
+            foreach (var (word, child) in Children) {
+                if (child.Id == encoded) {
+                    sb.Append(word);
+                    return child.Decode(encoded, sb);
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        public void WriteEncodings(int encoding = default)
+        {
+            int counter = 1;
+
+            foreach (var (_, child) in Children) {
+                encoding =  (encoding << (int)Math.Log2(counter)) | counter;
+                child.Id =  encoding;
+                counter  += 1;
+                child.WriteEncodings(encoding << 1);
+            }
         }
     }
 }

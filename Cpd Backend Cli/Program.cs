@@ -1,4 +1,4 @@
-﻿#define TEST_2
+﻿#define TEST_1
 using System.Runtime.InteropServices;
 using System.Text;
 using DataModel;
@@ -12,20 +12,20 @@ const string outputPath = @"C:\Users\caita\Desktop\Trab CPD\Files";
 
 
 var records = CsvSerializer.Serialize<SalesCsv>(inputPath);
-BinarySalesConverter.CsvToBinaryFiles(inputPath, outputPath);
+BinarySalesConverter.CsvToBinaryFiles(inputPath, outputPath, FileMode.OpenOrCreate);
 
 var sales = BinarySalesConverter.BinaryFilesToObjects(outputPath);
 
 
-var ordered_by_users = Query.Order(sales, "user_name", true)
-    .Select(x => x.User!.user_name);
+var ordered_by_users = Query.Order(sales, "user_name")
+    .Select(x => x.User!.user_name).ToArray();
 
 
-
-foreach (var sale in ordered_by_users.Take(10))
+foreach (var sale in ordered_by_users.ToArray())
 {
     Console.WriteLine(sale);
 }
+Console.WriteLine(ordered_by_users.Length);
 
 #endif
 
@@ -36,27 +36,21 @@ foreach (var sale in ordered_by_users.Take(10))
 //
 // Console.WriteLine(prefix_tree.PrettyString());
 
+var     file     = new FileStream(@"C:\Users\caita\Desktop\Trab CPD\Files\UserNames.bin", FileMode.Open);
 
-var trie = new Patricia
-{
-    "A",
-    "Acolyte",
-    "Acolyte of the Void",
-    "Archer",
-    "Bills",
-    "Bills of the Void",
-    "Bills of the Void Archer",
-    "Void",
-    "Void Archer",
-    "Void Archer Acolyte",
-    "Hello",
-    "Hello World",
-    "Hurricane",
-};
+var trie = new PatriciaStream(file);
 
-Console.WriteLine(string.Join("\n", trie));
+var arr = trie.Retrieve("").Select(x => trie.Encode(x)).ToArray();
 
-Console.WriteLine(trie.PrettyString());
+Console.WriteLine(arr.Length);
+Console.WriteLine(arr.Distinct().Count());
 
-Console.WriteLine(string.Join(", ", trie.Retrieve("A")));
+// foreach(var item in trie.Retrieve(""))
+// {
+//     Console.WriteLine(trie.Encode(item));
+// }
+
+Console.WriteLine(trie.Retrieve("A").Count());
+
 #endif
+

@@ -6,186 +6,123 @@ namespace DataModel.DataStructures;
 
 public static partial class PatriciaExtension
 {
-    public static Span<byte> Serialize(this Patricia patricia, Encoding? encoding = null)
+    public static void Write(this Patricia patricia, Stream stream, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
 
-        using var stream = new MemoryStream();
-        using var writer = new BinaryWriter(stream);
-
-        SerializeNodeRecursive(patricia.Root, writer, encoding);
-
-        byte[] bytes = stream.ToArray();
-
-        return bytes;
+        var writer = new BinaryWriter(stream);
+        WriteNode(patricia.Root, writer, encoding);
     }
 
-    public static void SerializeNodeRecursive(Patricia.Node node, BinaryWriter writer, Encoding? encoding = null)
+    public static void WriteNode(Patricia.Node node, BinaryWriter writer, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
 
         writer.Write(node.IsEndOfWord);
+        writer.Write(node.Id);
 
         // Write the number of children for this node
         writer.Write(node.Children.Count);
 
         // Write each child recursively
-        foreach (var child in node.Children) {
-            string key_array = string.Concat(child.Key);
-            writer.Write(key_array.Length);
-            byte[] bytes = encoding.GetBytes(key_array);
-            writer.BaseStream.Write(bytes);
-            SerializeNodeRecursive(child.Value, writer);
+        foreach (var (word, child) in node) {
+            string keys = string.Concat(word);
+            writer.Write(keys);
+            WriteNode(child, writer);
         }
     }
 
-    public static void Deserialize(this Patricia patricia, Span<byte> bytes,
-        Encoding?                                encoding = null)
+    public static void Read(this Patricia patricia, Stream stream)
+    {
+        stream.Seek(0, SeekOrigin.Begin);
+        if (stream.Length == 0) {
+            return;
+        }
+
+        var reader = new BinaryReader(stream);
+        var root   = ReadNode(reader);
+        
+        
+        var new_root = MergeNodes(patricia.Root, root);
+        
+        patricia.Root = new_root;
+        patricia.Root.WriteEncodings();
+    }
+    
+    public static Patricia MergeNodes(Patricia a, Patricia b)
+    {
+        var merged = new Patricia
+        {
+            Root = MergeNodes(a.Root, b.Root)
+        };
+        return merged;
+    }
+    
+    public static Patricia.Node MergeNodes(Patricia.Node a, Patricia.Node b)
+    {
+        var merged_node = new Patricia.Node();
+
+        // Merge the children of a and b
+        foreach (var child_a in a.Children) {
+            if (b.Children.TryGetValue(child_a.Key, out var child_b)) {
+                // Both a and b have a child with the same key, so merge them recursively
+                merged_node.Children[child_a.Key] = MergeNodes(child_a.Value, child_b);
+            }
+            else {
+                // Only a has a child with this key, so add it to the merged node
+                merged_node.Children[child_a.Key] = child_a.Value;
+            }
+        }
+
+        // Add any children of b that were not already added from a
+        foreach (var child_b in b.Children) {
+            if (!merged_node.Children.ContainsKey(child_b.Key)) {
+                merged_node.Children[child_b.Key] = child_b.Value;
+            }
+        }
+
+        merged_node.IsEndOfWord = a.IsEndOfWord || b.IsEndOfWord;
+
+        return merged_node;
+    }
+    public static Patricia.Node ReadNode(BinaryReader reader, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
-
-        using var stream = new MemoryStream(bytes.ToArray());
-        using var reader = new BinaryReader(stream);
-
-        patricia.Root = DeserializeNodeRecursive(reader, encoding);
-
-        static Patricia.Node DeserializeNodeRecursive(BinaryReader reader, Encoding? encoding = null)
+        var node = new Patricia.Node
         {
-            encoding ??= Encoding.UTF8;
-
-
-            var node = new Patricia.Node
-            {
-                IsEndOfWord = reader.ReadBoolean()
-            };
-
-            // Read the number of children for this node
-            int num_children = reader.ReadInt32();
-
-            // Read each child recursively
-            for (int i = 0; i < num_children; i++) {
-                int        key_length   = reader.ReadInt32();
-                Span<byte> symbol_bytes = new byte[key_length];
-                reader.BaseStream.ReadExactly(symbol_bytes);
-                string word = encoding.GetString(symbol_bytes);
-                node.Children[word] = DeserializeNodeRecursive(reader);
-            }
-
+            IsEndOfWord = reader.ReadBoolean(),
+            Id = reader.ReadInt32()
+        };
+        if (reader.BaseStream.Position == reader.BaseStream.Length) {
             return node;
         }
-    }
-
-    public static void WriteToFile(this Patricia patricia,               string    filePath,
-        FileMode                                 mode = FileMode.Create, Encoding? encoding = null)
-    {
-        encoding ??= Encoding.UTF8;
-
-        using var writer = new BinaryWriter(File.Open(filePath, mode));
-        WriteNodeRecursive(patricia.Root, writer, encoding);
-
-        static void WriteNodeRecursive(Patricia.Node node, BinaryWriter writer, Encoding? encoding = null)
+        int children_count = reader.ReadInt32();
+        for (int i = 0; i < children_count; i++)
         {
-            encoding ??= Encoding.UTF8;
-
-            writer.Write(node.IsEndOfWord);
-
-            // Write the number of children for this node
-            writer.Write(node.Children.Count);
-
-            // Write each child recursively
-            foreach (var child in node.Children) {
-                string key_array = string.Concat(child.Key);
-                writer.Write(key_array.Length);
-                byte[] bytes = encoding.GetBytes(key_array);
-                writer.BaseStream.Write(bytes);
-                WriteNodeRecursive(child.Value, writer);
+            string key = reader.ReadString();
+            
+            if (reader.BaseStream.Position == reader.BaseStream.Length) {
+                node.Children.Add(key, new Patricia.Node());
+                return node;
             }
+            
+            var child = ReadNode(reader, encoding);
+            node.Children.Add(key, child);
         }
+
+        return node;
     }
-
-    public static void ReadFromFile(this Patricia patricia, Stream fileStream, Encoding? encoding = null)
+    public static IEnumerable<Patricia.Node> ReadNodes(Stream fileStream, Encoding? encoding = null)
     {
-        encoding ??= Encoding.UTF8;
-        using var reader = new BinaryReader(fileStream);
-        patricia.Root = ReadNodeRecursive(reader);
-
-        static Patricia.Node ReadNodeRecursive(BinaryReader reader, Encoding? encoding = null)
+        var reader = new BinaryReader(fileStream, encoding ?? Encoding.UTF8);
+        while (reader.BaseStream.Position < reader.BaseStream.Length)
         {
-            encoding ??= Encoding.UTF8;
-
-            var node = new Patricia.Node
-            {
-                IsEndOfWord = reader.ReadBoolean()
-            };
-
-            // Read the number of children for this node
-            int num_children = reader.ReadInt32();
-
-            // Read each child recursively
-            for (int i = 0; i < num_children; i++) {
-                int        key_length   = reader.ReadInt32();
-                Span<byte> symbol_bytes = new byte[key_length];
-                reader.BaseStream.ReadExactly(symbol_bytes);
-                string word = encoding.GetString(symbol_bytes);
-                node.Children[word] = ReadNodeRecursive(reader);
-            }
-
-            return node;
+            var node = ReadNode(reader, encoding);
+            yield return node;
         }
     }
 
-    public static IEnumerable<string> RetrieveTrieFile(Stream fileStream, string prefix, Encoding? encoding = null)
-    {
-        var    trie   = new Patricia();
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(1024 * 4);
-        int    bytes_read;
-        bool   done = false;
-        while (!done && (bytes_read = fileStream.Read(buffer, 0, buffer.Length)) > 0) {
-            done = bytes_read < buffer.Length;
-            trie.Deserialize(buffer.AsSpan(0, bytes_read), encoding);
-            foreach (string word in trie.Retrieve(prefix)) {
-                yield return word;
-            }
-        }
-
-        ArrayPool<byte>.Shared.Return(buffer);
-    }
-
-    public static int AddWordTrieFile(Stream fileStream, string word, Encoding? encoding = null)
-    {
-        // Read the contents of the file into memory and construct the trie
-        byte[] buffer = new byte[fileStream.Length];
-        fileStream.Seek(0, SeekOrigin.Begin);
-        fileStream.ReadExactly(buffer);
-        var trie = new Patricia();
-        trie.Deserialize(buffer, encoding);
-
-        // Add the new word to the trie
-        trie.Add(word);
-
-        // Write the updated trie back to the file
-        fileStream.Seek(0, SeekOrigin.Begin);
-        var writer = new BinaryWriter(fileStream, encoding ?? Encoding.UTF8);
-        writer.Write(trie.Serialize());
-        writer.Flush();
-        return (int)fileStream.Position;
-    }
-
-    public static string PrettyString(Stream fileStream)
-    {
-        fileStream.Seek(0, SeekOrigin.Begin);
-        var trie = new Patricia();
-
-        // Read the contents of the file into memory and construct the trie
-        byte[] buffer = new byte[fileStream.Length];
-        fileStream.Seek(0, SeekOrigin.Begin);
-        fileStream.ReadExactly(buffer);
-        trie.Deserialize(buffer);
-
-        // Retrieve all words in the trie that match the prefix
-        return trie.PrettyString();
-    }
-
+    
     public static bool CommonPrefix(this string a, string b)
     {
         for (int i = 0; i < Math.Min(a.Length, b.Length); i++) {

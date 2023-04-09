@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,13 +11,16 @@ namespace DataModel;
 
 public static class FileSave
 {
+    
+    static readonly HashSet<IDisposable> Files = new HashSet<IDisposable>();
+    
     public static IEnumerable<TType> ReadObjects<TType>(string directory)
         where TType : new()
     {
-        var       type       = typeof(TType);
-        using var file       = File.OpenRead(Path.Combine(directory, $"{type.Name}.bin"));
-        var       properties = type.GetProperties();
-        byte[]    buffer     = new byte[1024];
+        var    type       = typeof(TType);
+        var    file       = GetOrOpenFile(Files, Path.Combine(directory, $"{type.Name}.bin"), FileMode.Open, out _);
+        var    properties = type.GetProperties();
+        byte[] buffer     = new byte[1024];
 
 
         while (file.Position < file.Length) {
@@ -26,14 +31,15 @@ public static class FileSave
                     property_info.SetValue(instance, value);
                 }
                 else if (property_info.GetCustomAttribute<RangeFieldAttribute>() is { } range_field_attribute) {
-                    using var index_file  = File.OpenRead(Path.Combine(directory, range_field_attribute.IndexFile));
-                    var       index_bytes = buffer.AsSpan(range_field_attribute.Offset, range_field_attribute.Count);
-                    object?   value       = ReadIndexed(property_info.PropertyType, file, index_file, index_bytes);
+                    string  path        = Path.Combine(directory, $"{property_info.PropertyType.Name}.bin");
+                    var     index_file  = GetOrOpenFile(Files, path, FileMode.Open, out _);
+                    var     index_bytes = buffer.AsSpan(range_field_attribute.Offset, range_field_attribute.Count);
+                    object? value       = ReadIndexed(property_info.PropertyType, file, index_file, index_bytes);
                     property_info.SetValue(instance, value);
                 }
                 else if (property_info.GetCustomAttribute<EntityFieldAttribute>() is { } entity_field_attribute) {
-                    using var entity_file =
-                        File.OpenRead(Path.Combine(directory, $"{property_info.PropertyType.Name}.bin"));
+                    string path        = Path.Combine(directory, $"{property_info.PropertyType.Name}.bin");
+                    var    entity_file = GetOrOpenFile(Files, path, FileMode.Open, out _);
 
                     object? value = ReadEntity<int>(
                         property_info.PropertyType,
@@ -50,21 +56,46 @@ public static class FileSave
                     property_info.SetValue(instance, value);
                 }
                 else if (property_info.GetCustomAttribute<PatriciaFieldAttribute>() is { } trie_field_attribute) {
-                    using var trie_file =
-                        File.OpenRead(Path.Combine(directory, $"{property_info.PropertyType.Name}.bin"));
-
-                    var patricia_stream = new PatriciaStream(trie_file);
-
-                    if (property_info.PropertyType == typeof(string)) {
-
-                    }
-                    else {
-                        throw new NotImplementedException();
-                    }
+                    object value = ReadPatricia(directory, file, property_info, trie_field_attribute);
+                    property_info.SetValue(instance, value);
                 }
             }
 
             yield return instance;
+        }
+
+        foreach (var disposable in Files) {
+            disposable.Dispose();
+        }
+
+        Files.Clear();
+    }
+
+    static object ReadPatricia(
+        string       directory,
+        Stream       file,
+        PropertyInfo propertyInfo,
+        PatriciaFieldAttribute attribute)
+    {
+        var    binary_reader = new BinaryReader(file, Encoding.UTF8, true);
+        string path          = Path.Combine(directory, $"{attribute.IndexFile}");
+        var    file_mode     = File.Exists(path) ? FileMode.Open : FileMode.Create;
+
+        var trie_file = GetOrOpenFile(Files, path, file_mode, out _);
+
+        if (propertyInfo.PropertyType == typeof(string)) {
+            var    patricia_stream = new PatriciaStream(trie_file);
+            
+            if (binary_reader.BaseStream.Position == binary_reader.BaseStream.Length) {
+                return string.Empty;
+            }
+            file.Position += attribute.Offset;
+            int    encoding        = binary_reader.ReadInt32();
+            string value           = patricia_stream.Decode(encoding);
+            return value;
+        }
+        else {
+            throw new NotImplementedException();
         }
     }
 
@@ -97,8 +128,9 @@ public static class FileSave
                 property_info.SetValue(instance, value);
             }
             else if (property_info.GetCustomAttribute<RangeFieldAttribute>() is { } range_field_attribute) {
-                var object_index_file = File.OpenRead(Path.Combine(directory, range_field_attribute.IndexFile));
-                var index_bytes       = buffer.AsSpan(range_field_attribute.Offset, range_field_attribute.Count);
+                string path              = Path.Combine(directory, $"{range_field_attribute.IndexFile}");
+                var    object_index_file = GetOrOpenFile(Files, path, FileMode.Open, out _);
+                var    index_bytes       = buffer.AsSpan(range_field_attribute.Offset, range_field_attribute.Count);
 
                 object? value = ReadIndexed(
                     property_info.PropertyType,
@@ -106,6 +138,10 @@ public static class FileSave
                     object_index_file,
                     index_bytes);
 
+                property_info.SetValue(instance, value);
+            }
+            else if (property_info.GetCustomAttribute<PatriciaFieldAttribute>() is { } patricia_field_attribute) {
+                object value = ReadPatricia(directory, entityIndexFile, property_info, patricia_field_attribute);
                 property_info.SetValue(instance, value);
             }
         }
@@ -138,16 +174,27 @@ public static class FileSave
     {
         var type = typeof(TType);
 
-        using var file = File.Open(Path.Combine(directory, $"{type.Name}.bin"), fileMode);
+        string path = Path.Combine(directory, $"{type.Name}.bin");
+        var    file = GetOrOpenFile(Files, path, fileMode, out _);
 
         var properties = type.GetProperties();
 
         foreach (var value in values.ToArray()) {
             WriteObjectProprieties(directory, properties, value, file);
         }
-    }
+        foreach (var disposable in Files.OfType<PatriciaStream>()) {
+            disposable.FLush();
+        }
+        
+        foreach (var disposable in Files) {
+            disposable.Dispose();
+        }
 
-    static void WriteObjectProprieties<TType>(string directory, IEnumerable<PropertyInfo> properties,
+        Files.Clear();
+    }
+    
+    static void WriteObjectProprieties<TType>(string directory,
+        IEnumerable<PropertyInfo>                    properties,
         TType                                        value,
         Stream                                       file)
     {
@@ -163,28 +210,41 @@ public static class FileSave
                 }
             }
             else if (property_info.GetCustomAttribute<RangeFieldAttribute>() is { } index) {
-                using var index_file = File.Open(Path.Combine(directory, index.IndexFile), FileMode.Append);
+                string path       = Path.Combine(directory, index.IndexFile);
+                var    index_file = GetOrOpenFile(Files, path, FileMode.Append, out _);
                 WriteIndexedObject<Range>(property_value, file, index_file);
             }
             else if (property_info.GetCustomAttribute<EntityFieldAttribute>() is { } entity_field_attribute) {
-                var       entity_type = property_value!.GetType();
-                var       entity_properties = entity_type.GetProperties();
-                using var entity_file = File.Open(Path.Combine(directory, $"{entity_type.Name}.bin"), FileMode.Append);
-                int       offset = (int)entity_file.Position;
+                string path        = Path.Combine(directory, $"{property_value!.GetType().Name}.bin");
+                var    entity_file = GetOrOpenFile(Files, path, FileMode.Append, out _);
+
+                var entity_type       = property_value!.GetType();
+                var entity_properties = entity_type.GetProperties();
+                int offset            = (int)entity_file.Position;
                 file.Write(BinarySerializer.Serialize(offset));
-                WriteObjectProprieties(directory, entity_properties, property_value, entity_file);
+
+                WriteObjectProprieties(directory, entity_properties, property_value!, entity_file);
             }
-
             else if (property_info.GetCustomAttribute<PatriciaFieldAttribute>() is { } patricia_index) {
-                using var patricia_index_file = File.Open(Path.Combine(directory, $"{patricia_index.IndexFile}.bin"),
-                    FileMode.Append);
+                string         path          = Path.Combine(directory, $"{patricia_index.IndexFile}");
+                var            patricia_file = GetOrOpenFile(Files, path, FileMode.Open, out bool created);
+                PatriciaStream patricia_stream;
 
-                var patricia_stream = new PatriciaStream(patricia_index_file);
+                if (created) {
+                    patricia_stream = new PatriciaStream(patricia_file);
+                    Files.Add(patricia_stream);
+                }
+                else {
+                    patricia_stream = Files.OfType<PatriciaStream>().First();
+                }
+
+                var buffer = patricia_stream.Buffer;
 
                 if (property_value is string str) {
-                    int offset      = (int)patricia_stream.BaseStream.Position;
-                    int written     = patricia_stream.Add(str);
-                    var index_bytes = BinarySerializer.Serialize(offset..written);
+                    
+                   int encoding = patricia_stream.Add(str);
+
+                    var index_bytes = BinarySerializer.Serialize(encoding);
                     file.Write(index_bytes);
                 }
                 else {
@@ -192,6 +252,27 @@ public static class FileSave
                 }
             }
         }
+    }
+
+    static FileStream GetOrOpenFile(ISet<IDisposable> disposables, string path, FileMode fileMode,
+        out bool                                      created)
+    {
+        var entity_file = disposables.OfType<FileStream>().FirstOrDefault(x => x.Name == path);
+
+        if (entity_file != null) {
+            created = false;
+            return entity_file;
+        }
+
+        if (!File.Exists(path) && fileMode.HasFlag(FileMode.Open)) {
+            fileMode = FileMode.OpenOrCreate;
+        }
+
+        entity_file = File.Open(path, fileMode);
+        disposables.Add(entity_file);
+
+        created = true;
+        return entity_file;
     }
 
     static int WriteObject(object? value, Stream fileStream)
